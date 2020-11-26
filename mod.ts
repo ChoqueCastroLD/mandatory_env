@@ -9,17 +9,25 @@ function parseEnv(content: string, unsafe: boolean) {
         let key = line.substring(0, line.indexOf('='));
         
         let value = line.substring(line.indexOf('=') + 1);
-        if((value.startsWith("'") && value.endsWith("'")) || (value.startsWith("`") && value.endsWith("`"))) {
-            value = `"${value.slice(1, value.length-1)}"`;
+        if((value.startsWith("'") && value.endsWith("'")) || (value.startsWith("`") && value.endsWith("`")) || (value.startsWith('"') && value.endsWith('"'))) {
+            value = value.slice(1, value.length-1);
+            
+            // value = `"${value.slice(1, value.length-1)}"`;
+            // value = JSON.parse(value);
         }
         
-        try {
-            value = JSON.parse(value);
-        } catch (error) {
-            try {
-                value = JSON.parse(`"${value.replace(/(^|[^\\])(\\\\)*\\$/, "$&\\")}"`);
-            } catch (error) {}
-        }
+        value = JSON.parse(`"${value.replace(/(^|[^\\])(\\\\)*\\$/, "$&\\")}"`);
+        
+        // try {
+        //     value = JSON.parse(`"${value}"`);
+        // } catch (error) {
+        //     try {
+        //         value = JSON.parse(`"${value.replace(/(^|[^\\])(\\\\)*\\$/, "$&\\")}"`);
+        //     } catch (error) {}
+        // }
+        // console.log(value);
+        
+
         temp[key] = value;
         if(!unsafe && key.includes(' ')) {
             throw new Error(`❌ Environment Variable Name should not contain ' '\nError caught at ${key}`);
@@ -76,13 +84,33 @@ function load(variables: Array<string>, options: {pathToEnv?: string, loadToEnv?
     
     const finalEnv = envValidation(_env, variables);
     
+    // Deno wont accept anything but strings :shrug:
+    // If support for other types ever gets added just comment these 3 lines :p
+    for (const key in finalEnv) {
+        finalEnv[key] = (finalEnv[key] || '').toString();
+    }
+
     if(options.loadToEnv) {
         for (const key in finalEnv) {
-            Deno.env.set(key, finalEnv[key]);
+            Deno.env.set(key, finalEnv[key] || '');
         }
     }
-    
-    return finalEnv;
+
+    return {
+        get(key: string) {
+            return finalEnv[key];
+        },
+        delete(key: string) {
+            finalEnv[key] = undefined;
+            delete finalEnv[key];
+        },
+        set(key: string, value: string) {
+            finalEnv[key] = value;
+        },
+        toObject() {
+            return {...finalEnv};
+        }
+    };
 }
 
 export {load}
